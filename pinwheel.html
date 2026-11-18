@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Number Wheel</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 1.5rem 1rem;
+      background: #f8fafc;
+      color: #172033;
+      font: 1rem system-ui, sans-serif;
+      text-align: center;
+    }
+
+    main { max-width: 34rem; margin: auto; }
+
+    fieldset {
+      min-width: 0;
+      margin: 0;
+      padding: 1rem;
+      border: 1px solid #cbd5e1;
+      border-radius: .75rem;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: .75rem;
+    }
+
+    .controls + .controls { margin-top: .75rem; }
+    input, select, button { font: inherit; }
+    input, select { padding: .35rem; }
+    input { width: 5.5rem; }
+
+    button {
+      padding: .55rem 1rem;
+      border: 0;
+      border-radius: .5rem;
+      background: #1d4ed8;
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:disabled, button[aria-disabled="true"] {
+      opacity: .55;
+      cursor: default;
+    }
+
+    .wheel-frame {
+      position: relative;
+      width: min(85vw, 360px);
+      margin: 1.5rem auto;
+    }
+
+    #wheel {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      box-shadow: 0 0 0 3px #172033;
+    }
+
+    #wheel span {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      font-weight: 700;
+    }
+
+    .pointer {
+      position: absolute;
+      z-index: 1;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 12px solid transparent;
+      border-right: 12px solid transparent;
+      border-top: 24px solid #172033;
+    }
+
+    #result { min-height: 1.5em; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Number Wheel</h1>
+
+    <form id="settings">
+      <fieldset id="wheel-controls">
+        <legend>Wheel settings</legend>
+
+        <div class="controls">
+          <label>Min <input id="min" type="number" step="1" value="1" required></label>
+          <label>Max <input id="max" type="number" step="1" value="15" required></label>
+          <button type="submit">Apply range</button>
+        </div>
+
+        <div class="controls">
+          <label>Number to remove <select id="remove-number"></select></label>
+          <button id="remove" type="button">Remove</button>
+        </div>
+      </fieldset>
+    </form>
+
+    <div class="wheel-frame" aria-hidden="true">
+      <div class="pointer"></div>
+      <div id="wheel"></div>
+    </div>
+
+    <div class="controls">
+      <button id="spin" type="button">Spin</button>
+      <button id="remove-picked" type="button" disabled>Remove picked number</button>
+    </div>
+
+    <p id="result" role="status">Press Spin to pick a number.</p>
+  </main>
+
+  <script>
+    const wheel = document.querySelector('#wheel');
+    const spin = document.querySelector('#spin');
+    const result = document.querySelector('#result');
+    const settings = document.querySelector('#settings');
+    const controls = document.querySelector('#wheel-controls');
+    const min = document.querySelector('#min');
+    const max = document.querySelector('#max');
+    const removeNumber = document.querySelector('#remove-number');
+    const remove = document.querySelector('#remove');
+    const removePicked = document.querySelector('#remove-picked');
+    const colors = ['#93c5fd', '#fca5a5', '#fde68a', '#86efac', '#c4b5fd'];
+
+    let numbers = Array.from({ length: 15 }, (_, i) => i + 1);
+    let rotation = 0;
+    let spinning = false;
+    let pickedNumber = null;
+
+    function updateRemovePicked() {
+      removePicked.disabled = spinning || pickedNumber === null || numbers.length === 1;
+      removePicked.textContent =
+        pickedNumber === null ? 'Remove picked number' : `Remove ${pickedNumber}`;
+    }
+
+    function drawWheel() {
+      const slice = 360 / numbers.length;
+      const stops = [];
+
+      rotation = 0;
+      wheel.style.transform = 'rotate(0deg)';
+      wheel.replaceChildren();
+      removeNumber.replaceChildren();
+
+      numbers.forEach((number, i) => {
+        const color = colors[i % colors.length];
+        stops.push(`${color} ${i * slice}deg ${(i + 1) * slice}deg`);
+
+        const angle = i * 2 * Math.PI / numbers.length;
+        const label = document.createElement('span');
+        label.textContent = number;
+        label.style.left = `${50 + 39 * Math.sin(angle)}%`;
+        label.style.top = `${50 - 39 * Math.cos(angle)}%`;
+        if (numbers.length > 25) label.style.fontSize = '.7rem';
+        wheel.append(label);
+
+        removeNumber.add(new Option(String(number), String(number)));
+      });
+
+      wheel.style.background =
+        `conic-gradient(from ${-slice / 2}deg, ${stops.join(', ')})`;
+
+      remove.disabled = numbers.length === 1;
+      removeNumber.disabled = numbers.length === 1;
+      updateRemovePicked();
+    }
+
+    function excludeNumber(number) {
+      if (spinning || number === null || numbers.length === 1) return;
+
+      numbers = numbers.filter(value => value !== number);
+      if (pickedNumber === number) pickedNumber = null;
+
+      drawWheel();
+      result.textContent = `Removed ${number}. ${numbers.length} remaining.`;
+    }
+
+    settings.addEventListener('submit', event => {
+      event.preventDefault();
+      if (spinning) return;
+
+      const first = min.valueAsNumber;
+      const last = max.valueAsNumber;
+      const count = last - first + 1;
+
+      if (!Number.isSafeInteger(first) || !Number.isSafeInteger(last) ||
+          count < 1 || count > 50) {
+        result.textContent = 'Enter a whole-number range containing 1 to 50 numbers.';
+        return;
+      }
+
+      numbers = Array.from({ length: count }, (_, i) => first + i);
+      pickedNumber = null;
+      drawWheel();
+      result.textContent = `Range set: ${first} to ${last}.`;
+    });
+
+    remove.addEventListener('click', () => {
+      excludeNumber(Number(removeNumber.value));
+    });
+
+    removePicked.addEventListener('click', () => {
+      excludeNumber(pickedNumber);
+      spin.focus();
+    });
+
+    spin.addEventListener('click', async () => {
+      if (spinning) return;
+
+      spinning = true;
+      pickedNumber = null;
+      controls.disabled = true;
+      spin.setAttribute('aria-disabled', 'true');
+      updateRemovePicked();
+      result.textContent = 'Spinning...';
+
+      const index = Math.floor(Math.random() * numbers.length);
+      const slice = 360 / numbers.length;
+      const target = (360 - index * slice) % 360;
+      const travel = (target - rotation + 360) % 360;
+
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const animation = wheel.animate([
+          { transform: `rotate(${rotation}deg)` },
+          { transform: `rotate(${rotation + 5 * 360 + travel}deg)` }
+        ], {
+          duration: 2800,
+          easing: 'cubic-bezier(.15,.65,.15,1)',
+          fill: 'forwards'
+        });
+
+        await animation.finished;
+        wheel.style.transform = `rotate(${target}deg)`;
+        animation.cancel();
+      } else {
+        wheel.style.transform = `rotate(${target}deg)`;
+      }
+
+      rotation = target;
+      pickedNumber = numbers[index];
+      result.textContent = numbers.length === 1
+        ? `Picked ${pickedNumber}. It's the last number on the wheel.`
+        : `Picked number: ${pickedNumber}`;
+
+      spinning = false;
+      controls.disabled = false;
+      spin.removeAttribute('aria-disabled');
+      updateRemovePicked();
+    });
+
+    drawWheel();
+  </script>
+</body>
+</html>
