@@ -1,3 +1,21 @@
+Fetched [https://raw.githubusercontent.com/afisyarani/pinwheel/main/pinwheel.html](https://raw.githubusercontent.com/afisyarani/pinwheel/main/pinwheel.html)
+Completed with input: {
+  "url": "https://raw.githubusercontent.com/afisyarani/pinwheel/main/pinwheel.html",
+  "raw": true,
+  "max_length": 12000
+}
+
+Verify slice color adjacency
+Completed with input: {
+  "description": "Verify slice color adjacency",
+  "query": "WITH RECURSIVE n(count) AS (SELECT 1 UNION ALL SELECT count + 1 FROM n WHERE count < 50), slices(count, i) AS (SELECT count, 0 FROM n UNION ALL SELECT count, i + 1 FROM slices WHERE i + 1 < count), colors AS (SELECT count, i, CASE WHEN count > 1 AND i = count - 1 AND i % 6 = 0 THEN 1 ELSE i % 6 END AS color FROM slices) SELECT (SELECT count(DISTINCT color) FROM colors WHERE count = 6) AS distinct_colors_for_six, (SELECT count(*) FROM colors a JOIN colors b ON a.count = b.count AND b.i = (a.i + 1) % a.count WHERE a.count > 1 AND a.color = b.color) AS matching_neighbors_across_all_sizes;"
+}
+
+The wheel used five colors, so with **1–6**, slice **6** reused slice **1**’s color. Those slices touch at the top, making them look like one slice. The fix adds a sixth color and prevents the first and last slices from sharing a color when the palette repeats.
+
+Replace the full contents of [your GitHub `pinwheel.html`](https://github.com/afisyarani/pinwheel/blob/main/pinwheel.html) with the code below and commit it. I checked the color logic for every wheel size from 1 to 50: **1–6 gets six distinct colors**, and no neighboring slices share a color.
+
+```html
 <!doctype html>
 <html lang="en">
 <head>
@@ -134,7 +152,7 @@
     const removeNumber = document.querySelector('#remove-number');
     const remove = document.querySelector('#remove');
     const removePicked = document.querySelector('#remove-picked');
-    const colors = ['#93c5fd', '#fca5a5', '#fde68a', '#86efac', '#c4b5fd'];
+    const colors = ['#93c5fd', '#fca5a5', '#fde68a', '#86efac', '#c4b5fd', '#fdba74'];
 
     let numbers = Array.from({ length: 15 }, (_, i) => i + 1);
     let rotation = 0;
@@ -157,7 +175,14 @@
       removeNumber.replaceChildren();
 
       numbers.forEach((number, i) => {
-        const color = colors[i % colors.length];
+        let colorIndex = i % colors.length;
+
+        // The last slice touches the first, so it cannot reuse the first color.
+        if (numbers.length > 1 && i === numbers.length - 1 && colorIndex === 0) {
+          colorIndex = 1;
+        }
+
+        const color = colors[colorIndex];
         stops.push(`${color} ${i * slice}deg ${(i + 1) * slice}deg`);
 
         const angle = i * 2 * Math.PI / numbers.length;
@@ -266,3 +291,4 @@
   </script>
 </body>
 </html>
+```
